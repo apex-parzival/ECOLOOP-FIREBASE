@@ -4,6 +4,11 @@ import * as ejs from 'ejs';
 import { S3Service } from '../s3/s3.service';
 import type { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
+import {
+  PRICE_SHEET_COLUMNS,
+  REQUIRED_DOCUMENTS,
+  DocumentRole,
+} from './documents.constants';
 
 @Injectable()
 export class DocumentsService {
@@ -13,6 +18,62 @@ export class DocumentsService {
     private s3: S3Service,
     @Optional() @InjectQueue('pdf') private pdfQueue?: Queue,
   ) {}
+
+  /**
+   * Returns the required-document checklist for a given company role so the
+   * onboarding UI and admin verification screen stay consistent with the DB.
+   */
+  getRequiredDocuments(role: string) {
+    const key = (role || '').toUpperCase() as DocumentRole;
+    return REQUIRED_DOCUMENTS[key] ?? [];
+  }
+
+  /**
+   * Builds a standardised, blank vendor price-sheet template as CSV (opens
+   * natively in Excel / Google Sheets). Used as the default downloadable
+   * template when an admin has not uploaded a custom processed sheet.
+   *
+   * Optionally pre-fills item rows extracted from the requirement.
+   */
+  buildPriceSheetTemplateCsv(opts?: {
+    title?: string;
+    rows?: { item: string; category?: string; quantity?: number | string; unit?: string }[];
+  }): { fileName: string; content: string } {
+    const escape = (v: unknown) => {
+      const s = v === undefined || v === null ? '' : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const lines: string[] = [];
+    if (opts?.title) {
+      lines.push(escape(`Price Sheet — ${opts.title}`));
+      lines.push('');
+    }
+    lines.push(PRICE_SHEET_COLUMNS.map(escape).join(','));
+
+    const rows = opts?.rows?.length
+      ? opts.rows
+      : Array.from({ length: 10 }).map(() => ({ item: '', category: '', quantity: '', unit: 'KG' }));
+
+    rows.forEach((r, i) => {
+      lines.push(
+        [
+          i + 1, // S.No
+          escape(r.item), // Material / Item
+          escape(r.category), // Category
+          escape(r.quantity), // Estimated Quantity (KG)
+          escape(r.unit || 'KG'), // Unit
+          '', // Condition / Grade
+          '', // Your Rate (INR per KG)
+          '', // Total Amount (INR)
+          '', // Remarks
+        ].join(','),
+      );
+    });
+
+    const safeTitle = (opts?.title || 'price_sheet').replace(/[^a-z0-9]/gi, '_');
+    return { fileName: `${safeTitle}_template.csv`, content: lines.join('\n') };
+  }
 
   async generateWorkOrderPdf(
     auctionId: string,

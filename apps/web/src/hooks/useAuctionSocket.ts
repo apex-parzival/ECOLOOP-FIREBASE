@@ -3,7 +3,24 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4000';
+const getSocketBaseUrl = () => {
+  const configuredUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/api\/?$/, '').replace(/\/+$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+      return `${protocol}//${hostname}:4000`;
+    }
+    return window.location.origin.replace(/\/+$/, '');
+  }
+
+  return 'http://localhost:4000';
+};
+
+const API_URL = getSocketBaseUrl();
 
 interface AuctionBid {
   id: string;

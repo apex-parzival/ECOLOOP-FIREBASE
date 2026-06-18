@@ -293,6 +293,7 @@ export default function AdminAuctions() {
                       bidIncrement: Number(configForm.tickSize),
                       maximumTickSize: configForm.maxTick ? Number(configForm.maxTick) : undefined,
                       extensionTime: Number(configForm.extensionTime),
+                      maxExtensions: Number(configForm.maxExtensions || 3),
                       liveConfigured: true,
                     });
                     if (configListing) {

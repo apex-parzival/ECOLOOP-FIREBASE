@@ -99,6 +99,25 @@ export default function VendorInvitationPage() {
     setImages(prev => [...prev, ...Array.from(e.target.files || [])]);
   };
 
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await api.get(`/documents/templates/price-sheet`, {
+        params: { title: details?.title || "price_sheet" },
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${(details?.title || "price_sheet").replace(/[^a-z0-9]/gi, "_")}_template.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      showToast("Could not download template. Please try again.", "error");
+    }
+  };
+
   const handleSubmitDocs = async () => {
     if (!auditFile && !excelFile && images.length === 0) {
       showToast("Upload at least one document or photo.", "error");
@@ -238,18 +257,30 @@ export default function VendorInvitationPage() {
 
               {/* Material sheet download (embedded in step 1) */}
               {!auditStatus && (
-                <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                  <div>
-                    <p className="text-sm font-bold text-blue-700 dark:text-blue-400">Material Sheet</p>
-                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Download and review before uploading your audit report</p>
+                <div className="relative overflow-hidden flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-blue-50/80 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/10 border border-blue-100 dark:border-blue-900/50 shadow-sm backdrop-blur-sm transition-all duration-300 hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800">
+                  <div className="absolute -right-10 -top-10 w-24 h-24 bg-blue-400/10 rounded-full blur-2xl pointer-events-none" />
+                  
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-xl bg-blue-600/10 dark:bg-blue-400/10 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0 shadow-inner">
+                      <span className="material-symbols-outlined text-2xl">table_chart</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-slate-800 dark:text-slate-200 tracking-wide">Material Sheet</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">Download and review the template before uploading your audit report.</p>
+                    </div>
                   </div>
                   {details.processedSheetUrl ? (
                     <a href={details.processedSheetUrl} target="_blank" rel="noopener noreferrer"
-                      className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition-all">
-                      <span className="material-symbols-outlined text-sm">download</span>Download
+                      style={{ color: 'white' }}
+                      className="shrink-0 w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs uppercase tracking-wider shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                      <span className="material-symbols-outlined text-sm" style={{ color: 'white' }}>download</span>Download template
                     </a>
                   ) : (
-                    <span className="text-xs text-amber-600 font-bold">Not available yet</span>
+                    <button onClick={handleDownloadTemplate}
+                      style={{ color: 'white' }}
+                      className="shrink-0 w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white font-black text-xs uppercase tracking-wider shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                      <span className="material-symbols-outlined text-sm" style={{ color: 'white' }}>download</span>Download standard template
+                    </button>
                   )}
                 </div>
               )}

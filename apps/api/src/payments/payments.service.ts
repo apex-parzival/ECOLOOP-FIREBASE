@@ -389,7 +389,7 @@ export class PaymentsService {
     }
 
     // Fetch winner and client users to notify
-    let vendorUser = null;
+    let vendorUser: any = null;
     if (auctionData.winnerId) {
       const usersSnap = await this.db
         .collection('users')
@@ -401,7 +401,7 @@ export class PaymentsService {
       }
     }
 
-    let clientUser = null;
+    let clientUser: any = null;
     if (auctionData.clientId) {
       const usersSnap = await this.db
         .collection('users')

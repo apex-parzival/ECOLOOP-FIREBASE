@@ -185,6 +185,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       : undefined;
 
     const liveApprovalStatus = req.auction?.liveApprovalStatus;
+    const adminTickSize = req.auction?.bidIncrement ?? req.auction?.tickSize;
+    const adminMaxTickSize = req.auction?.maximumTickSize ?? req.auction?.maxTickSize;
+    const adminExtensionTime = req.auction?.extensionTime ?? req.auction?.extensionMinutes;
+    const adminMaxExtensions = req.auction?.maxTicks ?? req.auction?.maxExtensions;
 
     return {
       id: req.id,
@@ -200,15 +204,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       urgency: req.urgency || 'medium',
       auctionPhase: auctionPhase as any,
       basePrice: req.auction?.basePrice || 0,
-      bidIncrement: req.auction?.bidIncrement || req.auction?.tickSize || 1000,
-      maximumTickSize: req.auction?.maximumTickSize,
-      extensionTime: req.auction?.extensionMinutes ?? req.auction?.extensionTime,
-      maxExtensions: req.auction?.maxTicks ?? req.auction?.maxExtensions,
+      bidIncrement: adminTickSize || 1000,
+      tickSize: req.auction?.tickSize,
+      maximumTickSize: adminMaxTickSize,
+      extensionTime: adminExtensionTime,
+      extensionMinutes: req.auction?.extensionMinutes,
+      maxExtensions: adminMaxExtensions,
+      maxTicks: req.auction?.maxTicks,
+      liveApprovalStatus,
       highestEmdAmount: req.auction?.highestEmdAmount || 0,
-      invitedVendorIds: Array.isArray(req.invitedVendorIds) ? req.invitedVendorIds : (typeof req.invitedVendorIds === 'string' ? JSON.parse(req.invitedVendorIds) : []),
-      acceptedVendorIds: Array.isArray(req.acceptedVendorIds) ? req.acceptedVendorIds : (typeof req.acceptedVendorIds === 'string' ? JSON.parse(req.acceptedVendorIds) : []),
-      declinedVendorIds: Array.isArray(req.declinedVendorIds) ? req.declinedVendorIds : (typeof req.declinedVendorIds === 'string' ? JSON.parse(req.declinedVendorIds) : []),
-      auditApprovedVendorIds: Array.isArray(req.auditApprovedVendorIds) ? req.auditApprovedVendorIds : (typeof req.auditApprovedVendorIds === 'string' ? JSON.parse(req.auditApprovedVendorIds) : []),
+      invitedVendorIds: Array.isArray(req.invitedVendorIds)
+        ? req.invitedVendorIds
+        : (typeof req.invitedVendorIds === 'string'
+          ? JSON.parse(req.invitedVendorIds)
+          : (req.vendorInvites || []).map((v: any) => v.vendorId)),
+      acceptedVendorIds: Array.isArray(req.acceptedVendorIds)
+        ? req.acceptedVendorIds
+        : (typeof req.acceptedVendorIds === 'string'
+          ? JSON.parse(req.acceptedVendorIds)
+          : []),
+      declinedVendorIds: Array.isArray(req.declinedVendorIds)
+        ? req.declinedVendorIds
+        : (typeof req.declinedVendorIds === 'string'
+          ? JSON.parse(req.declinedVendorIds)
+          : []),
+      auditApprovedVendorIds: Array.isArray(req.auditApprovedVendorIds)
+        ? req.auditApprovedVendorIds
+        : (typeof req.auditApprovedVendorIds === 'string'
+          ? JSON.parse(req.auditApprovedVendorIds)
+          : []),
       sealedBidStartDate: req.auction?.sealedPhaseStart || req.sealedPhaseStart,
       sealedBidEndDate: req.auction?.sealedPhaseEnd || req.sealedPhaseEnd,
       auctionStartDate,
@@ -217,6 +241,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       auctionId: req.auction?.id,
       liveConfigured: liveApprovalStatus === 'approved',
       requirementStatus: statusMap[req.status] ?? undefined,
+      processedSheetUrl: req.processedSheetUrl ?? undefined,
       poStatus: req.auction?.poNumber ? 'issued' : undefined,
       poNumber: req.auction?.poNumber,
       poPaymentTerms: req.auction?.poPaymentTerms,
@@ -284,6 +309,62 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const fetchAllData = async () => {
     try {
+      const isClient = currentUser?.role === 'client';
+      const clientCompanyId = currentUser?.companyId;
+
+      if (isClient) {
+        const [requirementsRes, userProductsRes, auctionsRes, notificationsRes] = await Promise.all([
+          api.get(`/requirements${clientCompanyId ? `?clientId=${clientCompanyId}` : ''}`).catch(() => ({ data: [] })),
+          api.get('/user-products/mine').catch(() => ({ data: [] })),
+          api.get(`/auctions${clientCompanyId ? `?clientId=${clientCompanyId}` : ''}`).catch(() => ({ data: [] })),
+          api.get('/notifications').catch(() => ({ data: [] })),
+        ]);
+
+        const clientAuctions = auctionsRes.data || [];
+        const bidsRes = clientAuctions.length > 0
+          ? await Promise.all(
+              clientAuctions.map((auction: any) =>
+                api.get(`/auctions/bids?auctionId=${auction.id}`).catch(() => ({ data: [] })),
+              ),
+            )
+          : [];
+
+        const requirementsListings = (requirementsRes.data || []).map(mapRequirementToListing);
+        const userProductListings = (userProductsRes.data || []).map(mapUserProductToListing);
+
+        const backendListings = [...requirementsListings, ...userProductListings];
+        const backendBidsRaw = bidsRes.flatMap((response: any) => response.data || []);
+        const backendBids = backendBidsRaw.map((b: any) => ({
+          ...b,
+          vendorName: b.vendorName || b.vendor?.name || b.vendor?.company?.name || 'Unknown Vendor',
+          status: 'pending',
+          type: b.phase?.toLowerCase() || 'open',
+          listingId: b.auction?.requirementId || b.auctionId,
+        }));
+
+        const backendNotifications = (notificationsRes.data || []).map((n: any) => ({
+          id: n.id,
+          userId: n.userId,
+          type: n.type,
+          title: n.title,
+          message: n.message,
+          link: n.link,
+          read: n.read,
+          createdAt: n.createdAt,
+        }));
+
+        setState(prev => ({
+          ...prev,
+          listings: backendListings.length > 0 ? backendListings : prev.listings,
+          bids: backendBids.length > 0 ? backendBids : prev.bids,
+          users: prev.users,
+          audits: prev.audits,
+          notifications: backendNotifications.length > 0 ? backendNotifications : prev.notifications,
+          isInitialized: true,
+        }));
+        return;
+      }
+
       const [requirementsRes, userProductsRes, bidsRes, usersRes, auctionsRes, auditsRes, notificationsRes] = await Promise.all([
         api.get('/requirements').catch(() => ({ data: [] })),
         api.get('/user-products/admin/all').catch(() => ({ data: [] })),

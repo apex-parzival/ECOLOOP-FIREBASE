@@ -1,7 +1,25 @@
 import axios from 'axios';
 
 const getBaseURL = () => {
-  let url = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
+  const configuredUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (configuredUrl) {
+    let url = configuredUrl;
+    // Ensure it ends with /api but not with a trailing slash after it
+    if (!url.endsWith('/api') && !url.endsWith('/api/')) {
+      url = url.replace(/\/+$/, '') + '/api';
+    }
+    return url.replace(/\/+$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+      return `${protocol}//${hostname}:4000/api`;
+    }
+    return `${window.location.origin.replace(/\/+$/, '')}/api`;
+  }
+
+  let url = 'http://localhost:4000/api';
   // Ensure it ends with /api but not with a trailing slash after it
   if (!url.endsWith('/api') && !url.endsWith('/api/')) {
     url = url.replace(/\/+$/, '') + '/api';

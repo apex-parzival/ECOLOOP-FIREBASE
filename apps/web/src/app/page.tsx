@@ -212,7 +212,7 @@ function LandingPageContent() {
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10" />
         <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-[#1E8E3E] rounded-full blur-[150px] opacity-20 animate-pulse pointer-events-none" />
 
-        <section className="flex w-full relative z-10 flex-col lg:flex-row justify-center px-4 sm:px-8 lg:px-20 pt-32 pb-16 lg:py-20 min-h-screen items-center gap-12 lg:gap-20">
+        <section className="flex w-full relative z-10 flex-col lg:flex-row justify-center px-4 sm:px-8 lg:px-20 pt-40 pb-16 lg:pt-48 lg:pb-20 min-h-screen items-center gap-12 lg:gap-20">
 
           <div className="w-full max-w-[700px] flex flex-col items-center lg:items-start text-center lg:text-left">
 

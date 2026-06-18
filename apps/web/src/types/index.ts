@@ -152,9 +152,12 @@ export interface Listing {
   targetPrice?: number;
   highestEmdAmount?: number;
   bidIncrement?: number;
+  tickSize?: number;
   maximumTickSize?: number;
   extensionTime?: number;
+  extensionMinutes?: number;
   maxExtensions?: number;
+  maxTicks?: number;
   currentExtensions?: number;
   urgency?: 'low' | 'medium' | 'high';
   pickupAddress?: string;
@@ -163,6 +166,7 @@ export interface Listing {
   // Auction identity
   auctionId?: string;
   liveConfigured?: boolean;
+  liveApprovalStatus?: 'pending' | 'notified' | 'approved' | 'change_requested';
   // Requirement upload flow
   requirementId?: string;
   requirementStatus?: 'pending' | 'processing' | 'client_review' | 'finalized' | 'rejected';

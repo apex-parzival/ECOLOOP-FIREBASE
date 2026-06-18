@@ -109,7 +109,7 @@ export class UserProductsService {
 
       // Fetch quotes
       const quotesSnap = await doc.ref.collection('quotes').get();
-      const quotes = [];
+      const quotes: any[] = [];
       for (const qDoc of quotesSnap.docs) {
         const qData = qDoc.data();
         let vendorCompany = null;

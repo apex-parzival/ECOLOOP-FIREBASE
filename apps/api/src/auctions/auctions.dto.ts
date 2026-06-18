@@ -38,12 +38,12 @@ export class CreateAuctionDto {
   @IsNumber()
   @IsOptional()
   @Type(() => Number)
-  maxTicks?: number;
+  maximumTickSize?: number;
 
   @IsNumber()
   @IsOptional()
   @Type(() => Number)
-  maximumTickSize?: number;
+  maxTicks?: number;
 
   @IsNumber()
   @IsOptional()

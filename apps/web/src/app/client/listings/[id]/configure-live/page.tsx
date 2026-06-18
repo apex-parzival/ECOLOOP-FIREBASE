@@ -12,6 +12,7 @@ export default function ConfigureLiveAuction() {
   const router = useRouter();
   const id = params.id as string;
   const { listings, bids, users, editListing, refreshData, currentUser, addNotification } = useApp();
+  const isAdmin = currentUser?.role === 'admin';
 
   const listing = listings.find(l => l.id === id);
   const sealedBids = bids.filter(b =>
@@ -51,6 +52,12 @@ export default function ConfigureLiveAuction() {
       setIsInitialized(true);
     }
   }, [listing, isInitialized]);
+
+  useEffect(() => {
+    if (listing?.liveApprovalStatus === "notified" || listing?.liveApprovalStatus === "approved") {
+      setRequestSent(true);
+    }
+  }, [listing?.liveApprovalStatus]);
 
   const handleRequestChanges = async () => {
     setRequestingSending(true);
@@ -123,6 +130,13 @@ export default function ConfigureLiveAuction() {
   const adminMaxTick = listing.auction?.maximumTickSize ?? listing.maximumTickSize ?? "—";
   const adminExtension = listing.auction?.extensionMinutes ?? listing.auction?.extensionTime ?? listing.extensionTime ?? listing.extensionMinutes ?? "—";
   const adminMaxExtensions = listing.auction?.maxTicks ?? listing.auction?.maxExtensions ?? listing.maxExtensions ?? "—";
+  const approvalNotice = listing.liveApprovalStatus === "approved"
+    ? "Approved and scheduled"
+    : listing.liveApprovalStatus === "notified"
+      ? "Sent for approval"
+      : listing.liveApprovalStatus === "change_requested"
+        ? "Changes requested"
+        : null;
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-20 animate-fade-in px-4 sm:px-6 lg:px-8">
@@ -234,7 +248,7 @@ export default function ConfigureLiveAuction() {
                 <span className="material-symbols-outlined text-base">admin_panel_settings</span>
                 Admin-Set Governance (Read Only)
               </h3>
-              {!requestSent ? (
+              {!approvalNotice && !requestSent ? (
                 <button
                   onClick={() => setShowChangeRequest(v => !v)}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400"
@@ -242,6 +256,11 @@ export default function ConfigureLiveAuction() {
                   <span className="material-symbols-outlined text-sm">edit_note</span>
                   Request Changes
                 </button>
+              ) : approvalNotice ? (
+                <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                  <span className="material-symbols-outlined text-sm">check_circle</span>
+                  {approvalNotice}
+                </span>
               ) : (
                 <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">
                   <span className="material-symbols-outlined text-sm">check_circle</span>
@@ -274,6 +293,13 @@ export default function ConfigureLiveAuction() {
                 <p className="text-base font-bold text-slate-700 dark:text-slate-300 mt-0.5">{adminMaxExtensions}</p>
               </div>
             </div>
+
+            {!isAdmin && (
+              <div className="p-4 rounded-xl border border-dashed border-slate-300 bg-white dark:bg-slate-900 dark:border-slate-700">
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Auction governance is locked by admin.</p>
+                <p className="text-xs text-slate-500 mt-1">Tick size, limits, and auto-extension rules are controlled centrally and are read-only here.</p>
+              </div>
+            )}
 
             {showChangeRequest && (
               <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-700">

@@ -1,9 +1,15 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import * as path from 'path';
+import * as fs from 'fs';
 import * as dotenv from 'dotenv';
 
-dotenv.config();
+let envPath = path.resolve(process.cwd(), '.env');
+if (!fs.existsSync(envPath)) {
+  envPath = path.resolve(process.cwd(), 'apps/api/.env');
+}
+dotenv.config({ path: envPath, override: true });
 
 console.log('--- EXECUTING MAIN.TS TOP LEVEL ---');
 

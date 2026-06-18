@@ -108,7 +108,7 @@ export class RatingsService {
       .where('toCompanyId', '==', companyId)
       .get();
 
-    const received = [];
+    const received: any[] = [];
     for (const doc of snap.docs) {
       const rData = doc.data();
       const fromCompanySnap = await this.firebaseService.db
@@ -133,7 +133,7 @@ export class RatingsService {
       });
     }
 
-    received.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    received.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
 
     const avg =
       received.length > 0

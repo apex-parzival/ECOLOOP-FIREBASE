@@ -398,6 +398,37 @@ export default function ClientListings() {
               <p className="font-bold text-amber-900 text-sm">{approveModal.title}</p>
             </div>
 
+            {(() => {
+              const listing = listings.find(l => l.id === approveModal.listingId);
+              if (!listing) return null;
+              return (
+                <div className="relative overflow-hidden flex items-center justify-between gap-4 p-4 rounded-xl bg-gradient-to-r from-blue-50/80 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/10 border border-blue-100 dark:border-blue-900/50 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-blue-600/10 dark:bg-blue-400/10 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                      <span className="material-symbols-outlined text-xl">table_chart</span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-slate-800 dark:text-slate-200">Processed Material List</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">Review the items before approving</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await api.get(`/requirements/${listing.id}/download/processed`);
+                        if (res.data?.url) window.open(res.data.url, '_blank');
+                      } catch { /* ignore */ }
+                    }}
+                    style={{ color: 'white' }}
+                    className="shrink-0 inline-flex items-center gap-1 px-3.5 py-2 rounded-lg bg-blue-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-blue-700 transition-all"
+                  >
+                    <span className="material-symbols-outlined text-xs" style={{ color: 'white' }}>download</span>
+                    Download
+                  </button>
+                </div>
+              );
+            })()}
+
             <div>
               <label className="label">Your Target Price (₹) <span className="text-red-500">*</span></label>
               <div className="relative">

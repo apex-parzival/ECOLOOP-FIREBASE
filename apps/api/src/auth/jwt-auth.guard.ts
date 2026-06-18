@@ -32,7 +32,13 @@ export class JwtAuthGuard implements CanActivate {
       try {
         const jwt = await import('jsonwebtoken');
         const cert = this.firebaseService.serviceAccount.private_key;
-        const decodedCustom = jwt.verify(token, cert, { algorithms: ['RS256'] }) as any;
+        // The web app persists the backend-issued custom token as its session token.
+        // Accept the signed token even after Firebase's default custom-token TTL so
+        // existing sessions do not drop back to anonymous state on restart.
+        const decodedCustom = jwt.verify(token, cert, {
+          algorithms: ['RS256'],
+          ignoreExpiration: true,
+        }) as any;
         
         const userId = decodedCustom.uid || decodedCustom.sub;
         

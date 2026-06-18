@@ -225,21 +225,24 @@ export class RequirementsService {
         const clientSnap = await this.firebaseService.db.collection('companies').doc(req.clientId).get();
         if (clientSnap.exists) {
           client = { id: clientSnap.id, ...clientSnap.data() };
-          const userSnap = await this.firebaseService.db.collection('users')
-            .where('companyId', '==', req.clientId)
-            .limit(1)
-            .get();
-          const users = userSnap.docs.map((doc: any) => ({ id: doc.id }));
-          client.users = users;
+          if (!clientId) {
+            const userSnap = await this.firebaseService.db.collection('users')
+              .where('companyId', '==', req.clientId)
+              .limit(1)
+              .get();
+            const users = userSnap.docs.map((doc: any) => ({ id: doc.id }));
+            client.users = users;
+          }
         }
       }
 
-      // Fetch audit invitations subcollection
-      const auditSnap = await this.firebaseService.db.collection('requirements')
-        .doc(req.id)
-        .collection('auditInvitations')
-        .get();
-      const auditInvitations = auditSnap.docs.map((doc: any) => this.mapAuditInvitation(doc.data(), doc.id));
+      // Client-scoped list views don't need the audit invitation fan-out.
+      const auditInvitations = clientId
+        ? []
+        : (await this.firebaseService.db.collection('requirements')
+            .doc(req.id)
+            .collection('auditInvitations')
+            .get()).docs.map((doc: any) => this.mapAuditInvitation(doc.data(), doc.id));
 
       // Fetch auction
       const auctionSnap = await this.firebaseService.db.collection('auctions')
@@ -248,11 +251,19 @@ export class RequirementsService {
         .get();
       const auction = auctionSnap.empty ? null : { id: auctionSnap.docs[0].id, ...auctionSnap.docs[0].data() };
 
+      // Signed URL for the admin-cleaned processed sheet so the UI (admin,
+      // client and invited vendors) can download it directly.
+      let processedSheetUrl: string | null = null;
+      if (req.processedS3Key) {
+        processedSheetUrl = await this.s3.getSignedUrl(req.processedS3Key).catch(() => null);
+      }
+
       return this.mapDates({
         ...req,
         client: client ? this.mapDates(client) : null,
         auditInvitations,
         auction: auction ? this.mapDates(auction) : null,
+        processedSheetUrl,
       });
     }));
 
@@ -332,12 +343,24 @@ export class RequirementsService {
       ),
     );
 
+    // Signed URLs for the raw (client-uploaded) and processed (admin-cleaned) sheets
+    let rawSheetUrl: string | null = null;
+    if (req.rawS3Key) {
+      rawSheetUrl = await this.s3.getSignedUrl(req.rawS3Key).catch(() => null);
+    }
+    let processedSheetUrl: string | null = null;
+    if (req.processedS3Key) {
+      processedSheetUrl = await this.s3.getSignedUrl(req.processedS3Key).catch(() => null);
+    }
+
     return this.mapDates({
       ...req,
       client: client ? this.mapDates(client) : null,
       auditInvitations: auditInvitations.filter(Boolean),
       auction: auction ? this.mapDates(auction) : null,
       clientDocumentsWithUrls,
+      rawSheetUrl,
+      processedSheetUrl,
     });
   }
 

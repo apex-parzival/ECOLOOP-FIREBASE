@@ -212,7 +212,7 @@ export class PickupsService {
     const pickup = { ...pickupDoc.data(), ...updateData } as any;
 
     // Email vendor that gate pass is ready
-    let vendorUser = null;
+    let vendorUser: any = null;
     if (auctionData.winnerId) {
       const usersSnap = await this.db.collection('users')
         .where('companyId', '==', auctionData.winnerId)
