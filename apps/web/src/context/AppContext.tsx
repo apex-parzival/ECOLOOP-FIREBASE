@@ -7,7 +7,7 @@ import axios from 'axios';
 
 interface AppContextType extends AppState {
   refreshData: () => Promise<void>;
-  login: (role: UserRole, email: string, password?: string) => Promise<void>;
+  login: (role: UserRole, email: string, password?: string) => Promise<any>;
   logout: () => void;
   register: (role: UserRole, name: string, email: string, password?: string, phone?: string) => Promise<{ devEmailOtp?: string; devPhoneOtp?: string; resumed?: boolean; resumeStep?: number }>;
   startOnboarding: (role: 'client' | 'vendor' | 'consumer', email: string, password: string) => void;
@@ -309,15 +309,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const fetchAllData = async () => {
     try {
-      const isClient = currentUser?.role === 'client';
-      const clientCompanyId = currentUser?.companyId;
+      const isClient = state.currentUser?.role === 'client';
+      const clientCompanyId = state.currentUser?.companyId;
 
       if (isClient) {
-        const [requirementsRes, userProductsRes, auctionsRes, notificationsRes] = await Promise.all([
+        const [requirementsRes, userProductsRes, auctionsRes, notificationsRes, pickupsRes] = await Promise.all([
           api.get(`/requirements${clientCompanyId ? `?clientId=${clientCompanyId}` : ''}`).catch(() => ({ data: [] })),
           api.get('/user-products/mine').catch(() => ({ data: [] })),
           api.get(`/auctions${clientCompanyId ? `?clientId=${clientCompanyId}` : ''}`).catch(() => ({ data: [] })),
           api.get('/notifications').catch(() => ({ data: [] })),
+          api.get('/pickups').catch(() => ({ data: [] })),
         ]);
 
         const clientAuctions = auctionsRes.data || [];
@@ -329,10 +330,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             )
           : [];
 
+        const pickups = pickupsRes.data || [];
         const requirementsListings = (requirementsRes.data || []).map(mapRequirementToListing);
         const userProductListings = (userProductsRes.data || []).map(mapUserProductToListing);
 
-        const backendListings = [...requirementsListings, ...userProductListings];
+        const backendListings = [...requirementsListings, ...userProductListings].map(listing => {
+          const pickup = pickups.find((p: any) => p.auctionId === listing.auctionId || p.requirementId === listing.id);
+          if (pickup && Array.isArray(pickup.pickupDocs)) {
+            const docs = pickup.pickupDocs;
+            return {
+              ...listing,
+              form6Url: docs.find((d: any) => d.type === 'FORM_6')?.paymentProofUrl || docs.find((d: any) => d.type === 'FORM_6')?.s3Key || listing.form6Url,
+              weightSlipEmptyUrl: docs.find((d: any) => d.type === 'WEIGHT_SLIP_EMPTY')?.paymentProofUrl || docs.find((d: any) => d.type === 'WEIGHT_SLIP_EMPTY')?.s3Key || listing.weightSlipEmptyUrl,
+              weightSlipLoadedUrl: docs.find((d: any) => d.type === 'WEIGHT_SLIP_LOADED')?.paymentProofUrl || docs.find((d: any) => d.type === 'WEIGHT_SLIP_LOADED')?.s3Key || listing.weightSlipLoadedUrl,
+              recyclingCertUrl: docs.find((d: any) => d.type === 'RECYCLING_CERTIFICATE')?.paymentProofUrl || docs.find((d: any) => d.type === 'RECYCLING_CERTIFICATE')?.s3Key || listing.recyclingCertUrl,
+              disposalCertUrl: docs.find((d: any) => d.type === 'DISPOSAL_CERTIFICATE')?.paymentProofUrl || docs.find((d: any) => d.type === 'DISPOSAL_CERTIFICATE')?.s3Key || listing.disposalCertUrl,
+            };
+          }
+          return listing;
+        });
+
         const backendBidsRaw = bidsRes.flatMap((response: any) => response.data || []);
         const backendBids = backendBidsRaw.map((b: any) => ({
           ...b,
@@ -353,19 +370,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           createdAt: n.createdAt,
         }));
 
-        setState(prev => ({
-          ...prev,
-          listings: backendListings.length > 0 ? backendListings : prev.listings,
-          bids: backendBids.length > 0 ? backendBids : prev.bids,
-          users: prev.users,
-          audits: prev.audits,
-          notifications: backendNotifications.length > 0 ? backendNotifications : prev.notifications,
-          isInitialized: true,
-        }));
+        setState(prev => {
+          const mergedListings = backendListings.map(bl => {
+            const existing = prev.listings.find(pl => pl.id === bl.id);
+            if (existing) {
+              return {
+                ...bl,
+                closingDocuments: (bl.closingDocuments?.length) ? bl.closingDocuments : existing.closingDocuments,
+                images: (bl.images?.length) ? bl.images : existing.images,
+                urgency: bl.urgency || existing.urgency,
+                bidCount: bl.bidCount !== undefined ? bl.bidCount : existing.bidCount,
+                viewCount: bl.viewCount !== undefined ? bl.viewCount : existing.viewCount,
+              };
+            }
+            return bl;
+          });
+
+          return {
+            ...prev,
+            listings: mergedListings,
+            bids: backendBids.length > 0 ? backendBids : prev.bids,
+            users: prev.users,
+            notifications: backendNotifications.length > 0 ? backendNotifications : prev.notifications,
+          };
+        });
         return;
       }
 
-      const [requirementsRes, userProductsRes, bidsRes, usersRes, auctionsRes, auditsRes, notificationsRes] = await Promise.all([
+      const [requirementsRes, userProductsRes, bidsRes, usersRes, auctionsRes, auditsRes, notificationsRes, pickupsRes] = await Promise.all([
         api.get('/requirements').catch(() => ({ data: [] })),
         api.get('/user-products/admin/all').catch(() => ({ data: [] })),
         api.get('/auctions/bids').catch(() => ({ data: [] })),
@@ -373,12 +405,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         api.get('/auctions').catch(() => ({ data: [] })),
         api.get('/audits/invitations').catch(() => ({ data: [] })),
         api.get('/notifications').catch(() => ({ data: [] })),
+        api.get('/pickups').catch(() => ({ data: [] })),
       ]);
 
+      const pickups = pickupsRes.data || [];
       const backendListings = [
         ...(requirementsRes.data || []).map(mapRequirementToListing),
         ...(userProductsRes.data || []).map(mapUserProductToListing),
-      ];
+      ].map(listing => {
+        const pickup = pickups.find((p: any) => p.auctionId === listing.auctionId || p.requirementId === listing.id);
+        if (pickup && Array.isArray(pickup.pickupDocs)) {
+          const docs = pickup.pickupDocs;
+          return {
+            ...listing,
+            form6Url: docs.find((d: any) => d.type === 'FORM_6')?.paymentProofUrl || docs.find((d: any) => d.type === 'FORM_6')?.s3Key || listing.form6Url,
+            weightSlipEmptyUrl: docs.find((d: any) => d.type === 'WEIGHT_SLIP_EMPTY')?.paymentProofUrl || docs.find((d: any) => d.type === 'WEIGHT_SLIP_EMPTY')?.s3Key || listing.weightSlipEmptyUrl,
+            weightSlipLoadedUrl: docs.find((d: any) => d.type === 'WEIGHT_SLIP_LOADED')?.paymentProofUrl || docs.find((d: any) => d.type === 'WEIGHT_SLIP_LOADED')?.s3Key || listing.weightSlipLoadedUrl,
+            recyclingCertUrl: docs.find((d: any) => d.type === 'RECYCLING_CERTIFICATE')?.paymentProofUrl || docs.find((d: any) => d.type === 'RECYCLING_CERTIFICATE')?.s3Key || listing.recyclingCertUrl,
+            disposalCertUrl: docs.find((d: any) => d.type === 'DISPOSAL_CERTIFICATE')?.paymentProofUrl || docs.find((d: any) => d.type === 'DISPOSAL_CERTIFICATE')?.s3Key || listing.disposalCertUrl,
+          };
+        }
+        return listing;
+      });
       
       const backendBidsRaw = bidsRes.data || [];
       const bidsByAuction: Record<string, any[]> = {};
@@ -526,28 +574,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await fetchAllData();
       return user;
     } catch (error: any) {
-      // Mock fallback: if backend is unreachable (no HTTP response), allow demo accounts
-      if (!error.response) {
-        const mockUser = MOCK_USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
-        if (mockUser && password === 'password') {
-          setState(prev => ({
-            ...prev,
-            currentUser: mockUser,
-            // Load mock data only if not already present (preserve any mid-session state updates)
-            ...(prev.listings.length === 0 ? {
-              listings: MOCK_LISTINGS,
-              bids: MOCK_BIDS,
-              users: MOCK_USERS,
-              notifications: MOCK_NOTIFICATIONS,
-              auditInvitations: MOCK_AUDIT_INVITATIONS,
-              vendorRatings: MOCK_VENDOR_RATINGS,
-            } : {
-              users: prev.users.length === 0 ? MOCK_USERS : prev.users,
-            }),
-          }));
-          return mockUser;
-        }
-      }
       console.error('Login failed', error);
       throw error;
     }
@@ -1253,13 +1279,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await fetchAllData();
     } catch (error) {
       console.error('Failed to verify compliance via API, updating locally', error);
-      setState(prev => ({
-        ...prev,
-        listings: prev.listings.map(l => l.id === listingId ? {
-          ...l, complianceStatus: 'verified', status: 'completed',
-        } : l),
-      }));
     }
+    setState(prev => ({
+      ...prev,
+      listings: prev.listings.map(l => l.id === listingId ? {
+        ...l, complianceStatus: 'verified', status: 'completed',
+      } : l),
+    }));
   };
 
   const rateVendor = async (listingId: string, vendorId: string, vendorName: string, overall: number, auditR: number, timelinessR: number, complianceR: number, comment: string) => {

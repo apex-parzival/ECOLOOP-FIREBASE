@@ -444,19 +444,17 @@ export class AuctionsService {
     return auctionDoc;
   }
 
-  async findAll(status?: AuctionStatus, clientId?: string) {
+  async findAll(status?: AuctionStatus, clientId?: string, winnerId?: string) {
     const db = this.firebaseService.db;
     let query: admin.firestore.Query = db.collection('auctions');
-    if (status) {
-      query = query.where('status', '==', status);
-    }
     if (clientId) {
       query = query.where('clientId', '==', clientId);
     }
-
-    // Limit to prevent quota issues - use pagination for large datasets
-    const snap = await query.limit(25).get();
-    const auctions = snap.docs.map((doc: any) => {
+    if (winnerId) {
+      query = query.where('winnerId', '==', winnerId);
+    }
+    const snap = await query.limit(200).get();
+    let auctions = snap.docs.map((doc: any) => {
       const data = doc.data();
       return {
         ...data,
@@ -468,7 +466,13 @@ export class AuctionsService {
         openPhaseStart: convertDate(data.openPhaseStart),
         openPhaseEnd: convertDate(data.openPhaseEnd),
       };
-    }).sort((a: any, b: any) => {
+    });
+
+    if (status) {
+      auctions = auctions.filter((a: any) => a.status === status);
+    }
+
+    return auctions.sort((a: any, b: any) => {
       const dateA = a.createdAt ? a.createdAt.getTime() : 0;
       const dateB = b.createdAt ? b.createdAt.getTime() : 0;
       return dateB - dateA;

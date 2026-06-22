@@ -37,19 +37,44 @@ export default function VendorRatingsPage() {
   const fetchData = useCallback(async () => {
     if (!currentUser?.companyId) return;
     try {
-      const res = await api.get("/pickups");
-      const completed = (res.data ?? []).filter((p: any) =>
+      const res = await api.get("/pickups").catch(() => ({ data: [] }));
+      const completedPickups = (res.data ?? []).filter((p: any) =>
         p.status === "COMPLETED" && p.auction?.winner?.id === currentUser.companyId
       );
+      
+      const aucRes = await api.get(`/auctions?status=COMPLETED&winnerId=${currentUser.companyId}`).catch(() => ({ data: [] }));
+      const wonAuctions = aucRes.data || [];
+
+      // Include all won auctions in the ratings list
+      const completed = wonAuctions.map((auc: any) => {
+        const existingPickup = completedPickups.find((p: any) => p.auction?.id === auc.id);
+        if (existingPickup) return existingPickup;
+        
+        return {
+          id: `pending_${auc.id}`,
+          status: "PENDING",
+          auction: auc,
+        };
+      });
+
+      // Add any completed pickups that might not be in wonAuctions
+      completedPickups.forEach((p: any) => {
+        if (!completed.find((c: any) => c.auction?.id === p.auction?.id)) {
+          completed.push(p);
+        }
+      });
+
       setPickups(completed);
 
       // Fetch existing ratings for each auction
       const ratingMap: Record<string, any> = {};
       await Promise.all(completed.map(async (p: any) => {
+        const id = p.auctionId || p.auction?.id;
+        if (!id) return;
         try {
-          const r = await api.get(`/ratings/auction/${p.auctionId}`);
+          const r = await api.get(`/ratings/auction/${id}`);
           const myRating = (r.data ?? []).find((rt: any) => rt.fromCompanyId === currentUser.companyId && rt.type === "VENDOR_TO_CLIENT");
-          if (myRating) ratingMap[p.auctionId] = myRating;
+          if (myRating) ratingMap[id] = myRating;
         } catch { /* silently ignore */ }
       }));
       setRatings(ratingMap);
@@ -57,8 +82,10 @@ export default function VendorRatingsPage() {
       // Initialize forms
       const initForms: Record<string, { score: number; comment: string }> = {};
       completed.forEach((p: any) => {
-        initForms[p.auctionId] = ratingMap[p.auctionId]
-          ? { score: ratingMap[p.auctionId].score, comment: ratingMap[p.auctionId].comment ?? "" }
+        const id = p.auctionId || p.auction?.id;
+        if (!id) return;
+        initForms[id] = ratingMap[id]
+          ? { score: ratingMap[id].score, comment: ratingMap[id].comment ?? "" }
           : { score: 5, comment: "" };
       });
       setForms(initForms);
